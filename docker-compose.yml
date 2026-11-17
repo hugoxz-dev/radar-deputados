@@ -1,0 +1,97 @@
+# Docker Compose do Radar dos Deputados (ambiente de desenvolvimento).
+#
+# Serviços:
+#   db        -> PostgreSQL 16 (dados ficam no volume "dados_postgres", sobrevivem a restart)
+#   api       -> FastAPI (back-end), com hot-reload: editar um .py reinicia o servidor
+#   web       -> Vite (front-end), com hot-reload no navegador
+#   scheduler -> agendador: roda o ciclo diário (atualizar, alertas, e-mails, resumos)
+#   mailpit   -> caixa de entrada de TESTE: os e-mails de alerta aparecem em http://localhost:8025
+#
+# Uso:  docker compose up --build
+# As variáveis vêm do arquivo .env (copie de .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      # Exposto no host para você poder usar DBeaver/pgAdmin e rodar o ETL fora do Docker.
+      - "${POSTGRES_PORTA_HOST:-5432}:5432"
+    volumes:
+      - dados_postgres:/var/lib/postgresql/data
+    healthcheck:
+      # A API só sobe depois que o banco responde (ver depends_on abaixo).
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Dentro da rede do Docker o banco se chama "db", não "localhost".
+      # Esta linha sobrescreve o DATABASE_URL do .env só para o container.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # No Windows, mudanças em pastas montadas não disparam eventos de arquivo;
+      # o polling faz o hot-reload funcionar.
+      WATCHFILES_FORCE_POLLING: "true"
+      # E-mails vão para o Mailpit (nome do serviço na rede do Docker)
+      SMTP_HOST: mailpit
+      SMTP_PORTA: "1025"
+    # Aplica as migrações pendentes antes de subir a API: o banco sempre
+    # fica na versão que o código espera, sem passo manual.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SMTP_HOST: mailpit
+      SMTP_PORTA: "1025"
+    command: python -m app.scheduler
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - api # a API aplica as migrações ao subir
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # interface web
+      - "1025:1025" # SMTP
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      # O Vite repassa chamadas /api/* para a API (ver vite.config.ts).
+      API_PROXY_TARGET: http://api:8000
+      VITE_USE_POLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Volume anônimo: mantém o node_modules do container (Linux) separado
+      # do node_modules da sua máquina (Windows).
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  dados_postgres:

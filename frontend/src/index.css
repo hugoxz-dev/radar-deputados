@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Paleta do portal: tons sóbrios para transmitir confiança (estilo portal de transparência). */
+@theme {
+  --color-marca-50: #eef6ff;
+  --color-marca-100: #d9eaff;
+  --color-marca-600: #1d5fbf;
+  --color-marca-700: #174c99;
+  --color-marca-900: #0f2f5e;
+}
+
+/* Tokens dos gráficos (paleta de referência validada para daltonismo).
+   Os gráficos usam var(--...) em vez de cores soltas, para trocar num lugar só. */
+:root {
+  color-scheme: light;
+  --grafico-superficie: #ffffff;
+  --grafico-serie-1: #2a78d6; /* série única (azul) */
+  --grafico-serie-1-suave: #9ec5f4; /* destaque de hover / período parcial */
+  --grafico-grade: #e7e6e2; /* linhas de grade: um passo acima da superfície */
+  --grafico-eixo: #52514e; /* texto dos eixos */
+  --grafico-texto: #0b0b0b;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}

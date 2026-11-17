@@ -1,0 +1,60 @@
+[project]
+name = "radar-deputados"
+version = "0.1.0"
+description = "Painel de gastos da cota parlamentar (CEAP) dos deputados federais"
+requires-python = ">=3.12"
+# As dependências já incluem o que as próximas fases vão usar,
+# para não precisar reconstruir a imagem Docker a cada fase.
+dependencies = [
+    # API
+    "fastapi>=0.162,<0.163",
+    "uvicorn[standard]>=0.54,<0.55",
+    "pydantic>=2.14,<3",
+    "pydantic-settings>=2.16,<3",
+    "email-validator>=2.3,<3",
+    "python-multipart>=0.0.33",
+    # Banco
+    "sqlalchemy>=2.0,<2.1",
+    "alembic>=1.20,<2",
+    "psycopg[binary]>=3.3,<4",
+    # ETL e análise
+    "httpx>=0.28,<0.29",
+    "pandas>=3.1,<4",
+    "numpy>=2,<3",
+    "apscheduler>=3.11,<4",
+    "tzdata>=2025.1",  # fusos horários (America/Sao_Paulo) para o agendador; a imagem slim não traz
+    # Autenticação
+    "pyjwt>=2.15,<3",
+    "bcrypt>=5,<6",
+    # IA e pagamento
+    "anthropic>=2.8,<3",
+    "stripe>=17,<18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.2,<10",
+    "ruff>=0.14",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Linter: python -m ruff check app tests   (corrige o automático com --fix)
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic/versions"]  # migrações geradas pelo Alembic ficam como vieram
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "SIM"]
+ignore = [
+    "B008",  # Depends()/Query() no valor padrão é o jeito oficial do FastAPI declarar dependências
+]
